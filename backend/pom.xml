@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.10</version>  <!-- upgraded: fixes Spring/Tomcat/Security CVEs -->
+        <relativePath/>
+    </parent>
+
+    <groupId>com.airecruiter</groupId>
+    <artifactId>ai-recruiter</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>AI Recruiter RAG Agent</name>
+
+    <properties>
+        <java.version>21</java.version>
+        <spring-ai.version>1.0.0</spring-ai.version>
+        <qdrant-client.version>1.13.0</qdrant-client.version>
+        <tika.version>3.2.2</tika.version>              <!-- upgraded: fixes CVE-2025-66516 (score 10.0) -->
+        <commons-compress.version>1.27.1</commons-compress.version>  <!-- upgraded: fixes CVE-2024-25710 -->
+        <bouncycastle.version>1.80</bouncycastle.version>            <!-- upgraded: fixes crypto CVEs -->
+        <protobuf.version>3.25.5</protobuf.version>                  <!-- upgraded: fixes CVE-2024-7254 -->
+        <jackson-bom.version>2.21.1</jackson-bom.version>
+        <assertj.version>3.27.7</assertj.version>
+        <postgresql.version>42.7.7</postgresql.version>
+        <geotools.version>29.5</geotools.version>
+        <aws-java-sdk.version>2.42.25</aws-java-sdk.version>
+        <hibernate-spatial.version>6.6.4.Final</hibernate-spatial.version>
+        <!-- ── Security vulnerability fixes ────── -->
+        <spring-security.version>6.5.9</spring-security.version>
+        <spring-framework.version>6.2.17</spring-framework.version>
+        <tomcat.version>10.1.53</tomcat.version>
+        <netty.version>4.1.132.Final</netty.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring AI BOM -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Force safe versions of vulnerable transitive deps -->
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${commons-compress.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+
+        <!-- ── Core Spring Boot ────────────────────────────── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ── Spring AI — Ollama ─────────────────────────── -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
+        </dependency>
+
+        <!-- ── Qdrant Java Client ──────────────────────────── -->
+        <dependency>
+            <groupId>io.qdrant</groupId>
+            <artifactId>client</artifactId>
+            <version>${qdrant-client.version}</version>
+        </dependency>
+
+        <!-- ── Qdrant gRPC transitive deps (explicit to resolve version conflicts) -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.2.1-jre</version>
+        </dependency>
+
+        <!-- ── Apache Tika — PDF, DOCX, TXT parsing ─────── -->
+        <!-- 3.2.2+ required: fixes critical XXE CVE-2025-66516 (CVSS 10.0) -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>${tika.version}</version>
+        </dependency>
+        <!-- Exclude junrar - RAR parsing not needed, has path traversal CVEs -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+            <version>${tika.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.github.junrar</groupId>
+                    <artifactId>junrar</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- gRPC stub - required by Qdrant client -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-stub</artifactId>
+            <version>1.65.0</version>
+        </dependency>
+
+        <!-- ── PostgreSQL Driver ───────────────────────────── -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ── Lombok ─────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ── Test ───────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- No <repositories> block needed: Spring AI 1.0.0 is on Maven Central -->
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

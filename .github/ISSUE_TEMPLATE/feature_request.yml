@@ -1,0 +1,35 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Which roadmap phase does this belong to?
+      options:
+        - Phase 1 — MVP
+        - Phase 2 — Enhanced AI
+        - Phase 3 — UI & Reporting
+        - Phase 4 — Deployment
+        - Future / Backlog
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

@@ -1,0 +1,76 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ai-recruiter
+
+  # ── Database ──────────────────────────────────────────────
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ai_recruiter}
+    username: ${SPRING_DATASOURCE_USERNAME:recruiter}
+    password: ${SPRING_DATASOURCE_PASSWORD:recruiter_pass}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # ── File upload limits ────────────────────────────────────
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  # ── Spring AI / Ollama ────────────────────────────────────
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        model: llama3.1:8b        # For RAG answer generation
+        options:
+          temperature: 0.3        # Low temp = factual, consistent output
+          num-ctx: 4096           # Context window
+      embedding:
+        model: nomic-embed-text   # For resume/JD embeddings
+
+# ── Qdrant ───────────────────────────────────────────────────
+qdrant:
+  host: ${QDRANT_HOST:localhost}
+  port: ${QDRANT_PORT:6334}
+  collections:
+    resumes: resume-chunks        # Collection name for resume embeddings
+    jobs: job-descriptions        # Collection name for job embeddings
+  vector-size: 768                # nomic-embed-text output dimension
+
+# ── App-specific settings ─────────────────────────────────────
+app:
+  rag:
+    top-k: 5                      # How many chunks to retrieve per query
+  bias:
+    sensitive-fields:             # Fields to strip/mask from AI output
+      - gender
+      - age
+      - ethnicity
+      - nationality
+  default-tenant-id: 00000000-0000-0000-0000-000000000001
+
+# ── Actuator (health checks) ──────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.airecruiter: DEBUG
+    org.springframework.ai: INFO

@@ -1,0 +1,38 @@
+# Maven
+backend/target/
+backend/*.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env.local
+
+# Docker volumes (never commit data)
+postgres_data/
+qdrant_data/
+ollama_data/
+
+# Node (frontend, when added)
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/build/
+
+# Python (ml, when added)
+ml/__pycache__/
+ml/*.pyc
+ml/.venv/
+ml/venv/
+
+# Logs
+*.log
+logs/
