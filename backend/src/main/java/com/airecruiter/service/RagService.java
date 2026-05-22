@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -38,7 +39,6 @@ import static io.qdrant.client.VectorsFactory.vectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class RagService {
 
     private final EmbeddingService embeddingService;
@@ -57,8 +57,23 @@ public class RagService {
     @Value("${app.default-tenant-id}")
     private UUID defaultTenantId;
 
-    @Value("${spring.ai.ollama.chat.model}")
+    @Value("${spring.ai.openai..chat.options.model}")
     private String chatModelName;
+
+
+    public RagService(EmbeddingService embeddingService,
+                      BiasCheckerService biasCheckerService,
+                      QdrantClient qdrantClient,
+                      @Qualifier("openAiChatModel") ChatModel chatModel,  // ← Groq
+                      CandidateRepository candidateRepository,
+                      AuditLogRepository auditLogRepository) {
+        this.embeddingService = embeddingService;
+        this.biasCheckerService = biasCheckerService;
+        this.qdrantClient = qdrantClient;
+        this.chatModel = chatModel;
+        this.candidateRepository = candidateRepository;
+        this.auditLogRepository = auditLogRepository;
+    }
 
     /**
      * Main entry point: processes a recruiter's natural language query.
@@ -72,26 +87,43 @@ public class RagService {
         // Step 1: Bias check
         boolean biasDetected = biasCheckerService.detectBiasInQuery(query);
 
+        log.info("Processing detectBiasInQuery: '{}'", biasDetected);
+
         // Step 2: Embed the query
+        log.info("Processing embedQuery:");
         float[] queryVector = embeddingService.embedQuery(query);
 
+
+
         // Step 3: Retrieve top-K chunks from Qdrant
+        log.info("Processing searchQdrant:");
         List<ScoredPoint> hits = searchQdrant(queryVector, topK);
 
+        log.info("Retrieve top-{} chunks from Qdrant:", hits.size());
+
         // Step 4: Extract text from results and look up candidate metadata
+        log.info("Processing buildMatches:");
         List<CandidateMatch> matches = buildMatches(hits);
 
+        log.info("Extract text from results and look up candidate metadata: {}", matches.size());
+
         // Step 5: Build prompt and generate answer
+        log.info("Processing buildContext:");
         String context = buildContext(hits);
+        log.info("Build prompt and get context : {}", context.length());
         String rawAnswer = generateAnswer(query, context);
+        log.info("Build prompt and generate answer : {}", rawAnswer.length());
 
         // Step 6: Sanitize output
+        log.info("Processing buildContext:");
         String safeAnswer = biasCheckerService.sanitizeOutput(rawAnswer);
+        log.info("Sanitized output : {}", safeAnswer.length());
         if (biasDetected) {
             safeAnswer = biasCheckerService.getBiasWarning() + "\n\n" + safeAnswer;
         }
 
         // Step 7: Audit log (mandatory for compliance)
+        log.info("Processing buildContext:");
         AuditLog auditLog = auditLogRepository.save(AuditLog.builder()
             .tenantId(defaultTenantId)
             .queryText(query)
@@ -101,6 +133,7 @@ public class RagService {
             .biasDetected(biasDetected)
             .modelUsed(chatModelName)
             .build());
+        log.info("AuditLog output : {}", auditLog);
 
         // Step 8: Return response
         return RagQueryResponse.builder()
@@ -134,29 +167,52 @@ public class RagService {
     }
 
     private List<CandidateMatch> buildMatches(List<ScoredPoint> hits) {
+
+        // ── Step A: Collect all candidate IDs from all hits at once ──
+        Map<UUID, String> idToChunkText = new LinkedHashMap<>();
+
+        for (ScoredPoint hit : hits) {
+            Map<String, io.qdrant.client.grpc.JsonWithInt.Value> payload = hit.getPayloadMap();
+            String candidateIdStr = payload.containsKey("candidateId")
+                    ? payload.get("candidateId").getStringValue() : null;
+            if (candidateIdStr == null) continue;
+
+            UUID candidateId = UUID.fromString(candidateIdStr);
+            String chunkText = payload.containsKey("text")
+                    ? payload.get("text").getStringValue() : "";
+            idToChunkText.put(candidateId, chunkText);
+        }
+
+        // ── Step B: ONE single DB query for all candidates ──
+        // SELECT * FROM candidates WHERE id IN ('id-1', 'id-2', 'id-3', ...)
+        Map<UUID, Candidate> candidateMap = candidateRepository
+                .findAllById(idToChunkText.keySet())   // 1 query only
+                .stream()
+                .collect(Collectors.toMap(Candidate::getId, c -> c));
+
+        // ── Step C: Build matches using the in-memory map (no DB calls) ──
         List<CandidateMatch> matches = new ArrayList<>();
 
         for (ScoredPoint hit : hits) {
             Map<String, io.qdrant.client.grpc.JsonWithInt.Value> payload = hit.getPayloadMap();
-
             String candidateIdStr = payload.containsKey("candidateId")
-                ? payload.get("candidateId").getStringValue() : null;
-            String chunkText = payload.containsKey("text")
-                ? payload.get("text").getStringValue() : "";
-
+                    ? payload.get("candidateId").getStringValue() : null;
             if (candidateIdStr == null) continue;
 
             UUID candidateId = UUID.fromString(candidateIdStr);
-            Optional<Candidate> candidateOpt = candidateRepository.findById(candidateId);
+            String chunkText = idToChunkText.getOrDefault(candidateId, "");
 
-            CandidateMatch match = CandidateMatch.builder()
-                .candidateId(candidateId)
-                .name(candidateOpt.map(Candidate::getFullName).orElse("Unknown"))
-                .similarityScore(hit.getScore())
-                .relevantExcerpt(truncate(chunkText, 300))
-                .build();
+            // No DB call — just a map lookup (instant)
+            String name = candidateMap.containsKey(candidateId)
+                    ? candidateMap.get(candidateId).getFullName()
+                    : "Unknown";
 
-            matches.add(match);
+            matches.add(CandidateMatch.builder()
+                    .candidateId(candidateId)
+                    .name(name)
+                    .similarityScore(hit.getScore())
+                    .relevantExcerpt(truncate(chunkText, 300))
+                    .build());
         }
 
         return matches;
@@ -189,29 +245,19 @@ public class RagService {
      */
     private String generateAnswer(String query, String context) {
         String promptText = """
-            You are an AI recruitment assistant. Your job is to help recruiters
-            find the best candidates based on their resume content.
-            
-            RULES:
-            - Only use information from the CONTEXT provided below.
-            - Do NOT make up or infer information not present in the context.
-            - Focus on skills, experience, and qualifications only.
-            - Do NOT comment on or infer personal characteristics (gender, age, ethnicity).
-            - Be concise and factual.
-            - Always note this is AI-assisted screening requiring human review.
-            
-            CONTEXT (retrieved resume sections):
-            %s
-            
-            RECRUITER QUERY: %s
-            
-            Provide a structured answer with:
-            1. A summary of the most relevant candidates
-            2. Key matching skills/experience for each
-            3. A recommended ranking with brief justification
-            
-            End with: "⚠ This is AI-assisted screening. Human review is required before any hiring decision."
-            """.formatted(context, query);
+        Recruitment assistant. Use ONLY the CONTEXT. Be brief and direct.
+
+        CONTEXT:
+        %s
+
+        QUERY: %s
+
+        Answer in this exact format:
+        1. [Candidate Name] - [2-3 skills only]
+        2. [Candidate Name] - [2-3 skills only]
+        Ranking: [Name] is best because [one sentence].
+        ⚠ AI-assisted screening. Human review required.
+        """.formatted(context, query);
 
         try {
             return chatModel.call(new Prompt(promptText))

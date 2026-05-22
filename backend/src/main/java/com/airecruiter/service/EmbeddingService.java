@@ -7,6 +7,7 @@ import io.qdrant.client.grpc.Points.PointStruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -33,7 +34,6 @@ import static io.qdrant.client.VectorsFactory.vectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmbeddingService {
 
     private final EmbeddingModel embeddingModel;
@@ -48,6 +48,12 @@ public class EmbeddingService {
     @Value("${spring.ai.ollama.embedding.model}")
     private String embeddingModelName;
 
+
+    public EmbeddingService(@Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel,
+                            QdrantClient qdrantClient) {
+        this.embeddingModel = embeddingModel;
+        this.qdrantClient = qdrantClient;
+    }
     /**
      * Embeds all chunks of a resume and stores them in Qdrant.
      * Returns list of point IDs (one per chunk).
