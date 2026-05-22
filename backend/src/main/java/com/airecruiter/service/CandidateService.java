@@ -7,13 +7,17 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Points.PointId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tika.exception.TikaException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.xml.sax.SAXException;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static io.qdrant.client.PointIdFactory.id;
@@ -42,7 +46,7 @@ public class CandidateService {
      * 4. Embed and store chunks in Qdrant (async)
      * 5. Persist all chunk IDs back to Postgres for future cleanup
      */
-    public Candidate ingestResume(MultipartFile file, String candidateName) throws Exception {
+    public Candidate ingestResume(MultipartFile file, String candidateName) throws IOException, TikaException, SAXException, ExecutionException, InterruptedException {
         log.info("Ingesting resume for: {}", candidateName);
 
         String rawText = parserService.extractText(file);
@@ -56,7 +60,7 @@ public class CandidateService {
         candidate = candidateRepository.save(candidate);
 
         var chunks = parserService.chunk(rawText);
-        List<String> pointIds = embeddingService.embedAndStoreResume(candidate.getId(), chunks);
+        List<String> pointIds = embeddingService.embedAndStoreResume(candidate.getId(), chunks).get();
 
         // Persist all chunk point IDs so we can clean them up on delete
         candidate.setQdrantPointIds(String.join(",", pointIds));

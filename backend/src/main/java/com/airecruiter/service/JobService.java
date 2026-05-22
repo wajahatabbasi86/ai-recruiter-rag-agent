@@ -60,7 +60,7 @@ public class JobService {
         job = jobRepository.save(job);
 
         var chunks = parserService.chunk(rawText);
-        List<String> pointIds = embeddingService.embedAndStoreJob(job.getId(), chunks);
+        List<String> pointIds = embeddingService.embedAndStoreJob(job.getId(), chunks).get();
 
         // Persist chunk IDs so we can clean up Qdrant on delete
         job.setQdrantPointIds(String.join(",", pointIds));

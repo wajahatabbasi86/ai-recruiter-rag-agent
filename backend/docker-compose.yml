@@ -1,5 +1,18 @@
 services:
 
+  maven-build:
+    image: maven:3.9.6-eclipse-temurin-21
+    container_name: ai-recruiter-build
+    working_dir: /app
+    volumes:
+      - .:/app
+      - maven_cache:/root/.m2
+    command: mvn package -DskipTests -B -q
+    profiles:
+      - build
+    networks:
+      - ai-recruiter-net
+
   ollama:
     image: ollama/ollama:latest
     container_name: ai-recruiter-ollama
@@ -59,7 +72,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: recruiter_pass
       OLLAMA_BASE_URL: http://ollama:11434
       QDRANT_HOST: qdrant
-      QDRANT_PORT: 6334        # ← fixed: gRPC port
+      QDRANT_PORT: 6334
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,6 +88,7 @@ volumes:
   ollama_data:
   qdrant_data:
   postgres_data:
+  maven_cache:
 
 networks:
   ai-recruiter-net:

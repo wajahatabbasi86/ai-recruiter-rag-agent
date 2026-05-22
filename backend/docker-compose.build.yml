@@ -1,0 +1,11 @@
+services:
+  app-build:
+    image: maven:3.9.6-eclipse-temurin-21
+    working_dir: /app
+    volumes:
+      - .:/app
+      - maven_cache:/root/.m2
+    command: mvn package -DskipTests -B -q
+
+volumes:
+  maven_cache:

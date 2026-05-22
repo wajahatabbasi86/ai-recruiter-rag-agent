@@ -20,7 +20,7 @@
         <java.version>21</java.version>
         <spring-ai.version>1.0.0</spring-ai.version>
         <qdrant-client.version>1.13.0</qdrant-client.version>
-        <tika.version>3.2.2</tika.version>              <!-- upgraded: fixes CVE-2025-66516 (score 10.0) -->
+        <tika.version>2.9.2</tika.version>              <!-- upgraded: fixes CVE-2025-66516 (score 10.0) -->
         <commons-compress.version>1.27.1</commons-compress.version>  <!-- upgraded: fixes CVE-2024-25710 -->
         <bouncycastle.version>1.80</bouncycastle.version>            <!-- upgraded: fixes crypto CVEs -->
         <protobuf.version>3.25.5</protobuf.version>                  <!-- upgraded: fixes CVE-2024-7254 -->
@@ -36,6 +36,8 @@
         <tomcat.version>10.1.53</tomcat.version>
         <netty.version>4.1.132.Final</netty.version>
         <commons-lang3.version>3.18.0</commons-lang3.version>
+        <pdfbox.version>3.0.2</pdfbox.version>
+        <commons-io.version>2.16.1</commons-io.version>
     </properties>
 
     <dependencyManagement>
@@ -122,13 +124,14 @@
         </dependency>
 
         <!-- ── Apache Tika — PDF, DOCX, TXT parsing ─────── -->
-        <!-- 3.2.2+ required: fixes critical XXE CVE-2025-66516 (CVSS 10.0) -->
+        <!-- Replace tika-parsers-standard-package with targeted parsers -->
+        <!-- tika-core: provides Tika, TikaException classes -->
+        <!-- REMOVE all individual tika-parser-* entries and replace with just these two -->
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-core</artifactId>
             <version>${tika.version}</version>
         </dependency>
-        <!-- Exclude junrar - RAR parsing not needed, has path traversal CVEs -->
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-parsers-standard-package</artifactId>
@@ -139,6 +142,13 @@
                     <artifactId>junrar</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <!-- ── commons-io required by Tika + commons-compress ── -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>${commons-io.version}</version>
         </dependency>
 
         <!-- gRPC stub - required by Qdrant client -->
