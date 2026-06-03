@@ -91,7 +91,7 @@ public class RagService {
 
         // Step 2: Embed the query
         log.info("Processing embedQuery:");
-        float[] queryVector = embeddingService.embedQuery(query);
+        float[] queryVector = embeddingService.embedQuery(enrichQuery(query));
 
 
 
@@ -143,6 +143,11 @@ public class RagService {
             .biasDetected(biasDetected)
             .auditLogId(auditLog.getId().toString())
             .build();
+    }
+
+    private String enrichQuery(String query) {
+        // Add recruitment context to improve embedding similarity
+        return "recruitment candidate resume " + query;
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
