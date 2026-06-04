@@ -1,0 +1,75 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai_recruiter_postgres
+    environment:
+      POSTGRES_DB: ai_recruiter
+      POSTGRES_USER: recruiter
+      POSTGRES_PASSWORD: recruiter_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recruiter -d ai_recruiter"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ai_recruiter_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai_recruiter_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    image: backend-app:latest
+    container_name: ai_recruiter_backend
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ai_recruiter
+      SPRING_DATASOURCE_USERNAME: recruiter
+      SPRING_DATASOURCE_PASSWORD: recruiter_pass
+      OLLAMA_BASE_URL: http://ollama:11434
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6334
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  ollama_data:
