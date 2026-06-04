@@ -3,6 +3,7 @@ package com.airecruiter.controller;
 import com.airecruiter.dto.JobRequestDto;
 import com.airecruiter.dto.JobResponseDto;
 import com.airecruiter.service.JobService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.exception.TikaException;
@@ -37,21 +38,13 @@ public class JobController {
 
     private final JobService jobService;
 
-    /**
-     * Upload a job description file.
-     * POST /api/jobs/upload
-     *
-     * @param jobFile the job file
-     * @param jobTitle the job title
-     * @return response entity with job response DTO
-     */
     @PostMapping("/upload")
     public ResponseEntity<JobResponseDto> uploadJobDescriptionFile(
             @RequestParam("file") MultipartFile jobFile,
             @RequestParam("jobTitle") String jobTitle) {
-        
+
         log.info("Job description file upload request received for job: {}", jobTitle);
-        
+
         try {
             JobResponseDto responseDto = jobService.uploadJobDescriptionFile(jobFile, jobTitle);
             return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
@@ -67,17 +60,11 @@ public class JobController {
         }
     }
 
-    /**
-     * Create a job description from request body.
-     * POST /api/jobs
-     *
-     * @param jobRequestDto the job request DTO
-     * @return response entity with job response DTO
-     */
+    // FIX 5: Added @Valid to trigger validation on JobRequestDto
     @PostMapping
-    public ResponseEntity<JobResponseDto> createJobDescription(@RequestBody JobRequestDto jobRequestDto) {
+    public ResponseEntity<?> createJobDescription(@Valid @RequestBody JobRequestDto jobRequestDto) {
         log.info("Job description creation request received for job: {}", jobRequestDto.getJobTitle());
-        
+
         try {
             JobResponseDto responseDto = jobService.createJobDescription(jobRequestDto);
             return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
@@ -87,16 +74,10 @@ public class JobController {
         }
     }
 
-    /**
-     * Get all active jobs.
-     * GET /api/jobs
-     *
-     * @return response entity with list of job response DTOs
-     */
     @GetMapping
     public ResponseEntity<List<JobResponseDto>> getAllActiveJobs() {
         log.info("Request received to fetch all active jobs");
-        
+
         try {
             List<JobResponseDto> jobs = jobService.getAllActiveJobs();
             return ResponseEntity.ok(jobs);
@@ -106,17 +87,10 @@ public class JobController {
         }
     }
 
-    /**
-     * Get a specific job by ID.
-     * GET /api/jobs/{jobId}
-     *
-     * @param jobId the job ID
-     * @return response entity with job response DTO
-     */
     @GetMapping("/{jobId}")
     public ResponseEntity<JobResponseDto> getJobById(@PathVariable UUID jobId) {
         log.info("Request received to fetch job with ID: {}", jobId);
-        
+
         try {
             JobResponseDto responseDto = jobService.getJobById(jobId);
             return ResponseEntity.ok(responseDto);
@@ -129,21 +103,13 @@ public class JobController {
         }
     }
 
-    /**
-     * Update a job description.
-     * PUT /api/jobs/{jobId}
-     *
-     * @param jobId the job ID
-     * @param jobRequestDto the job request DTO
-     * @return response entity with updated job response DTO
-     */
     @PutMapping("/{jobId}")
     public ResponseEntity<JobResponseDto> updateJobDescription(
             @PathVariable UUID jobId,
-            @RequestBody JobRequestDto jobRequestDto) {
-        
+            @Valid @RequestBody JobRequestDto jobRequestDto) {
+
         log.info("Request received to update job with ID: {}", jobId);
-        
+
         try {
             JobResponseDto responseDto = jobService.updateJobDescription(jobId, jobRequestDto);
             return ResponseEntity.ok(responseDto);
@@ -156,17 +122,10 @@ public class JobController {
         }
     }
 
-    /**
-     * Delete a job description.
-     * DELETE /api/jobs/{jobId}
-     *
-     * @param jobId the job ID
-     * @return response entity
-     */
     @DeleteMapping("/{jobId}")
     public ResponseEntity<Void> deleteJob(@PathVariable UUID jobId) {
         log.info("Request received to delete job with ID: {}", jobId);
-        
+
         try {
             jobService.deleteJob(jobId);
             return ResponseEntity.noContent().build();

@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -34,46 +35,67 @@ public class CandidateController {
 
     private final CandidateService candidateService;
 
-    /**
-     * Upload a resume file.
-     * POST /api/candidates/upload
-     *
-     * @param resumeFile the resume file
-     * @param candidateName the candidate name
-     * @return response entity with candidate response DTO
-     */
+    // FIX 6: Allowed file types for resume uploads
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
+            "text/plain"
+    );
+
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".docx", ".doc", ".txt");
+
     @PostMapping("/upload")
-    public ResponseEntity<CandidateResponseDto> uploadResume(
+    public ResponseEntity<?> uploadResume(
             @RequestParam("file") MultipartFile resumeFile,
             @RequestParam("candidateName") String candidateName) {
-        
+
         log.info("Resume upload request received for candidate: {}", candidateName);
-        
+
+        // FIX 6: Validate file is not empty
+        if (resumeFile.isEmpty()) {
+            return ResponseEntity.badRequest().body("File must not be empty");
+        }
+
+        // FIX 6: Validate candidate name
+        if (candidateName == null || candidateName.isBlank()) {
+            return ResponseEntity.badRequest().body("Candidate name is required");
+        }
+
+        // FIX 6: Validate file type by content type and extension
+        String contentType = resumeFile.getContentType();
+        String originalFilename = resumeFile.getOriginalFilename() != null
+                ? resumeFile.getOriginalFilename().toLowerCase() : "";
+        boolean validExtension = ALLOWED_EXTENSIONS.stream().anyMatch(originalFilename::endsWith);
+        boolean validContentType = contentType != null && ALLOWED_CONTENT_TYPES.contains(contentType);
+
+        if (!validExtension && !validContentType) {
+            return ResponseEntity.badRequest()
+                    .body("Invalid file type. Allowed: PDF, DOCX, DOC, TXT");
+        }
+
         try {
-            CandidateResponseDto responseDto = candidateService.ingestResume(resumeFile, candidateName);
+            CandidateResponseDto responseDto = candidateService.ingestResume(resumeFile, candidateName.trim());
             return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
         } catch (IOException ioException) {
             log.error("IO error during resume upload: {}", ioException.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to read the uploaded file");
         } catch (TikaException tikaException) {
             log.error("Tika parsing error during resume upload: {}", tikaException.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to parse the uploaded file");
         } catch (Exception exception) {
             log.error("Error during resume upload: {}", exception.getMessage(), exception);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("An unexpected error occurred");
         }
     }
 
-    /**
-     * Get all candidates.
-     * GET /api/candidates
-     *
-     * @return response entity with list of candidate response DTOs
-     */
     @GetMapping
     public ResponseEntity<List<CandidateResponseDto>> getAllCandidates() {
         log.info("Request received to fetch all candidates");
-        
+
         try {
             List<CandidateResponseDto> candidates = candidateService.getAllCandidates();
             return ResponseEntity.ok(candidates);
@@ -83,17 +105,10 @@ public class CandidateController {
         }
     }
 
-    /**
-     * Get a specific candidate by ID.
-     * GET /api/candidates/{candidateId}
-     *
-     * @param candidateId the candidate ID
-     * @return response entity with candidate response DTO
-     */
     @GetMapping("/{candidateId}")
     public ResponseEntity<CandidateResponseDto> getCandidateById(@PathVariable UUID candidateId) {
         log.info("Request received to fetch candidate with ID: {}", candidateId);
-        
+
         try {
             CandidateResponseDto responseDto = candidateService.getCandidateById(candidateId);
             return ResponseEntity.ok(responseDto);
@@ -106,17 +121,10 @@ public class CandidateController {
         }
     }
 
-    /**
-     * Delete a candidate.
-     * DELETE /api/candidates/{candidateId}
-     *
-     * @param candidateId the candidate ID
-     * @return response entity
-     */
     @DeleteMapping("/{candidateId}")
     public ResponseEntity<Void> deleteCandidate(@PathVariable UUID candidateId) {
         log.info("Request received to delete candidate with ID: {}", candidateId);
-        
+
         try {
             candidateService.deleteCandidate(candidateId);
             return ResponseEntity.noContent().build();
